@@ -1,39 +1,55 @@
 #!/bin/bash
 
-TEMPLATE=$1
+for ARGUMENT in "$@"; do
+  KEY=$(echo $ARGUMENT | cut -f1 -d=)
 
-BLOCKNAME=$2
+  KEY_LENGTH=${#KEY}
+  VALUE="${ARGUMENT:$KEY_LENGTH+1}"
 
-sudo mkdir /var/www/$BLOCKNAME;
+  if [ ! -z "$VALUE" ]; then
+    export "_$KEY"="$VALUE"
+    echo "_$KEY=$VALUE";
+  fi
+done
 
-sudo chown -R $USER:$USER /var/www/$BLOCKNAME;
+TEMPLATE=$_template
+
+BLOCKNAME=$_project_name
+
+mkdir /var/www/$BLOCKNAME;
+
+chown -R $USER:$USER /var/www/$BLOCKNAME;
 
 cp ./nginx-block-stubs/$TEMPLATE.stub ./$BLOCKNAME
 
 sed -i "s/{{BLOCKNAME}}/$BLOCKNAME/g" ./$BLOCKNAME
 
+declare -A VARS
+
 case $TEMPLATE in
-  laravel)
-    PHP_VERSION=$3
-
-    sed -i "s/{{PHP_VERSION}}/$PHP_VERSION/g" ./$BLOCKNAME
+  'laravel')
+    VARS[PHP_VERSION]=$_php_version
     ;;
 
-  static)
-    BUILD_DIR=$3
-
-    sed -i "s/{{BUILD_DIR}}/$BUILD_DIR/g" ./$BLOCKNAME
+  'static')
+    VARS[BUILD_DIR]=$_build_dir
     ;;
 
-  reverse)
-    TARGET=$3
-    PORT=$4
-
-    sed -i "s/{{TARGET}}/$TARGET/g" ./$BLOCKNAME
-    sed -i "s/{{PORT}}/$PORT/g" ./$BLOCKNAME
+  'reverse')
+    VARS[TARGET]=$_target
+    VARS[PORT]=$_port
     ;;
 esac
 
-sudo mv ./$BLOCKNAME /etc/nginx/sites-available/;
+for i in "${!VARS[@]}"; do
+  KEY=$i
+  VALUE=${VARS[$i]}
 
-sudo ln -s /etc/nginx/sites-available/$BLOCKNAME /etc/nginx/sites-enabled/;
+  sed -i "s/{{$KEY}}/$VALUE/g" ./$BLOCKNAME
+done
+
+mv ./$BLOCKNAME /etc/nginx/sites-available/;
+
+ln -s /etc/nginx/sites-available/$BLOCKNAME /etc/nginx/sites-enabled/;
+
+systemctl restart nginx;
